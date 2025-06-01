@@ -197,3 +197,227 @@ class HuffmanGameApp:
             "special_nodes": special_nodes
         })
         
+    def show_current_step(self):
+        if not self.steps_tree:
+            return
+            
+        step = self.steps_tree[self.current_step]
+        
+        # Atualizar descrição
+        self.step_description.delete("1.0", tk.END)
+        self.step_description.insert(tk.END, step["description"])
+        
+        # Atualizar contador de passos
+        self.step_label.config(text=f"Passo {self.current_step + 1}/{len(self.steps_tree)}")
+        
+        # Ativar/desativar botões
+        self.prev_button.config(state=tk.NORMAL if self.current_step > 0 else tk.DISABLED)
+        self.next_button.config(state=tk.NORMAL if self.current_step < len(self.steps_tree) - 1 else tk.DISABLED)
+        
+        # Desenhar a árvore
+        self.draw_tree(step)
+        
+    def draw_tree(self, step):
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        
+        # Criar grafo
+        G = nx.DiGraph()
+        
+        # Desenhar árvore especial se houver
+        if step["special_nodes"]:
+            # Se tivermos a árvore completa (último passo)
+            if len(step["special_nodes"]) == 1 and step["special_nodes"][0] == self.root_node:
+                self.add_node_to_graph(G, self.root_node)
+                # Usar layout hierárquico para a árvore completa
+                pos = self.hierarchical_layout(G, self.root_node)
+            else:
+                # Para passos intermediários, adicionar os nós especiais
+                for node in step["special_nodes"]:
+                    self.add_node_to_graph(G, node)
+                # Layout para os nós intermediários
+                pos = nx.spring_layout(G)
+        # Caso contrário, apenas mostrar os nós iniciais em linha
+        else:
+            for i, node in enumerate(step["nodes"]):
+                node_id = f"Node_{i}"
+                if node.char:
+                    label = f"'{node.char}': {node.freq}"
+                else:
+                    label = f"Int: {node.freq}"
+                G.add_node(node_id, label=label)
+            
+            # Organizar os nós iniciais em linha horizontal
+            pos = {}
+            num_nodes = len(step["nodes"])
+            if num_nodes > 0:
+                for i in range(num_nodes):
+                    node_id = f"Node_{i}"
+                    pos[node_id] = (i / (num_nodes - 1 or 1), 0.5)
+        
+        # Cores dos nós com base no tipo (folha ou interno)
+        node_colors = []
+        for node in G.nodes():
+            # Verificar se é nó folha (tem caractere) ou nó interno
+            if isinstance(node, str) and node.startswith("Node_"):
+                # Nós da lista inicial são azuis
+                node_colors.append('skyblue')
+            else:
+                # Para nós da árvore, verde para folhas e laranja para internos
+                label = G.nodes[node].get('label', '')
+                if "Int:" in label:
+                    node_colors.append('orange')
+                else:
+                    node_colors.append('lightgreen')
+        
+        # Desenhar nós e arestas
+        nx.draw(G, pos, ax=ax, with_labels=False, node_size=800, node_color=node_colors)
+        
+        # Adicionar rótulos
+        labels = nx.get_node_attributes(G, 'label')
+        nx.draw_networkx_labels(G, pos, labels=labels, font_size=10)
+        
+        # Adicionar rótulos nas arestas
+        edge_labels = nx.get_edge_attributes(G, 'label')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        
+        ax.set_axis_off()
+        self.canvas.draw()
+    
+    def hierarchical_layout(self, G, root_node, width=1., height=1.):
+        """Cria um layout hierárquico personalizado para a árvore de Huffman"""
+        def _get_tree_height(node):
+            if node is None:
+                return 0
+            return 1 + max(_get_tree_height(node.left), _get_tree_height(node.right))
+        
+        def _get_positions(node, x, y, width, level_height, positions):
+            if node is None:
+                return
+                
+            node_id = id(node)
+            positions[node_id] = (x, y)
+            
+            # Se for um nó folha, não tem filhos
+            if node.left is None and node.right is None:
+                return
+                
+            # Calcular posições dos filhos
+            next_y = y - level_height
+            
+            # Posicionar o filho esquerdo
+            if node.left:
+                _get_positions(node.left, x - width/2, next_y, width/2, level_height, positions)
+                
+            # Posicionar o filho direito
+            if node.right:
+                _get_positions(node.right, x + width/2, next_y, width/2, level_height, positions)
+        
+        # Obter a altura da árvore
+        tree_height = _get_tree_height(root_node)
+        
+        # Calcular a altura de cada nível
+        level_height = height / max(1, tree_height - 1) if tree_height > 1 else 0.5
+        
+        # Calcular posições
+        positions = {}
+        _get_positions(root_node, 0.5, 0.9, width/2, level_height, positions)
+        
+        return positions
+        
+    def add_node_to_graph(self, G, node, parent=None, edge_label=None, node_id=None):
+        if node is None:
+            return
+            
+        if node_id is None:
+            node_id = id(node)
+            
+        # Adicionar o nó ao grafo
+        if node.char:
+            char_display = repr(node.char)[1:-1] if node.char in ['\n', '\t', ' '] else node.char
+            label = f"'{char_display}': {node.freq}"
+        else:
+            label = f"Int: {node.freq}"
+        
+        G.add_node(node_id, label=label)
+        
+        # Adicionar aresta se tiver pai
+        if parent:
+            G.add_edge(parent, node_id, label=edge_label)
+            
+        # Adicionar filhos recursivamente
+        if node.left:
+            self.add_node_to_graph(G, node.left, node_id, '0', id(node.left))
+        if node.right:
+            self.add_node_to_graph(G, node.right, node_id, '1', id(node.right))
+    
+    def show_prev_step(self):
+        if self.current_step > 0:
+            self.current_step -= 1
+            self.show_current_step()
+            
+    def show_next_step(self):
+        if self.current_step < len(self.steps_tree) - 1:
+            self.current_step += 1
+            self.show_current_step()
+    
+    def generate_codes(self, node, code):
+        if node is None:
+            return
+            
+        # Se for um nó folha, armazenar o código
+        if node.char is not None:
+            self.codes[node.char] = code
+            
+        # Recursivamente percorrer a árvore
+        self.generate_codes(node.left, code + "0")
+        self.generate_codes(node.right, code + "1")
+    
+    def show_codes_and_stats(self):
+        # Mostrar códigos
+        self.codes_text.delete("1.0", tk.END)
+        self.codes_text.insert(tk.END, "Caracter | Código Huffman\n")
+        self.codes_text.insert(tk.END, "-" * 30 + "\n")
+        
+        for char, code in sorted(self.codes.items()):
+            display_char = repr(char)[1:-1] if char in ['\n', '\t', ' '] else char
+            self.codes_text.insert(tk.END, f"{display_char:8} | {code}\n")
+        
+        # Calcular estatísticas
+        self.stats_text.delete("1.0", tk.END)
+        
+        # Tamanho original (ASCII - 8 bits por caracter)
+        original_size = len(self.text) * 8
+        
+        # Tamanho comprimido
+        compressed_size = sum(len(self.codes[char]) * freq for char, freq in self.frequencies.items())
+        
+        # Taxa de compressão
+        compression_ratio = (1 - compressed_size / original_size) * 100
+        
+        # Tamanho médio do código
+        avg_code_length = compressed_size / len(self.text)
+        
+        self.stats_text.insert(tk.END, f"Número de caracteres: {len(self.text)}\n\n")
+        self.stats_text.insert(tk.END, f"Tamanho original (bits): {original_size}\n")
+        self.stats_text.insert(tk.END, f"Tamanho comprimido (bits): {compressed_size}\n\n")
+        self.stats_text.insert(tk.END, f"Taxa de compressão: {compression_ratio:.2f}%\n")
+        self.stats_text.insert(tk.END, f"Comprimento médio do código: {avg_code_length:.2f} bits\n")
+        
+        # Adicionar demonstração do texto comprimido
+        if self.text:
+            self.stats_text.insert(tk.END, "\nDemonstração da Compressão:\n")
+            # Mostrar os primeiros 20 caracteres do texto original
+            sample_text = self.text[:20]
+            sample_bits = ""
+            for char in sample_text:
+                if char in self.codes:
+                    sample_bits += self.codes[char]
+            
+            self.stats_text.insert(tk.END, f"Texto original (primeiros 20 caracteres):\n{sample_text}\n\n")
+            self.stats_text.insert(tk.END, f"Representação em bits (Huffman):\n{sample_bits}\n")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = HuffmanGameApp(root)
+    root.mainloop()
