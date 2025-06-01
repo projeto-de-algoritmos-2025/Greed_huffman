@@ -70,3 +70,8 @@ A visualização da árvore pode não ser perfeita para textos muito longos ou c
 
 ### Resultado final
 ![parte5](./img/parte5.png)
+
+
+## Outros
+
+[Video Apresentação](https://youtu.be/vDPJeTLdV3g?si=57MLgT33ndfai9tc)
